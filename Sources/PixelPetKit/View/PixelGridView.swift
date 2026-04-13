@@ -91,9 +91,15 @@ private final class RightClickNSView: NSView {
         super.viewDidMoveToWindow()
         // Install local monitor when we have a window
         if window != nil, monitor == nil {
-            monitor = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) { [weak self] event in
-                self?.handleRightClick(event)
-                return event  // pass event through so system menu still works
+            monitor = NSEvent.addLocalMonitorForEvents(
+                matching: [.rightMouseDown, .rightMouseDragged]
+            ) { [weak self] event in
+                if event.type == .rightMouseDown {
+                    self?.handleRightClick(event)
+                } else {
+                    self?.handleRightDrag(event)
+                }
+                return event
             }
         } else if window == nil {
             if let m = monitor { NSEvent.removeMonitor(m); monitor = nil }
@@ -101,14 +107,20 @@ private final class RightClickNSView: NSView {
     }
 
     private func handleRightClick(_ event: NSEvent) {
-        // Convert screen point to our view's coordinate space
+        eraseAtMouseLocation()
+    }
+
+    private func handleRightDrag(_ event: NSEvent) {
+        eraseAtMouseLocation()
+    }
+
+    private func eraseAtMouseLocation() {
         guard let win = window else { return }
         let winPt = win.convertPoint(fromScreen: NSEvent.mouseLocation)
         let viewPt = convert(winPt, from: nil)
-        // Check the point is inside our bounds
         guard bounds.contains(viewPt) else { return }
         let x = Int(viewPt.x / cellSize)
-        let y = Int((bounds.height - viewPt.y) / cellSize)  // flip Y (NSView origin bottom-left)
+        let y = Int((bounds.height - viewPt.y) / cellSize)
         let size = vm.canvas.size
         guard x >= 0, y >= 0, x < size, y < size else { return }
         Task { @MainActor in

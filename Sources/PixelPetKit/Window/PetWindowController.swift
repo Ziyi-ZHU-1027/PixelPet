@@ -11,6 +11,7 @@ public final class PetWindowController {
     private var wanderTarget: CGPoint? = nil
     private var wanderPauseTicks = 0
     private var wanderTimer: Timer?
+    private var distanceSinceLastHop: CGFloat = 0  // hop every N px for rhythmic feel
 
     public var windowOrigin: NSPoint {
         window.frame.origin
@@ -180,17 +181,27 @@ public final class PetWindowController {
         let dy = target.y - current.y
         let dist = sqrt(dx * dx + dy * dy)
 
-        let speed: CGFloat = CGFloat.random(in: 2...4)
+        let speed: CGFloat = 3.0   // fixed speed for consistent hop rhythm
+        let hopEvery: CGFloat = 28 // trigger a jump every 28px moved
+
         if dist < speed {
+            // Arrived at target
             window.setFrameOrigin(target)
             wanderTarget = nil
-            wanderPauseTicks = Int.random(in: 10...30)
+            distanceSinceLastHop = 0
+            // Pause briefly then pick next target
+            wanderPauseTicks = Int.random(in: 8...20)
             animator.triggerJump()
         } else {
             let nx = current.x + (dx / dist) * speed
             let ny = current.y + (dy / dist) * speed
             window.setFrameOrigin(NSPoint(x: nx, y: ny))
-            if Int.random(in: 0...14) == 0 { animator.triggerJump() }
+            distanceSinceLastHop += speed
+            // Hop every hopEvery pixels → rhythmic "hop hop hop" feel
+            if distanceSinceLastHop >= hopEvery {
+                distanceSinceLastHop = 0
+                animator.triggerJump()
+            }
         }
     }
 

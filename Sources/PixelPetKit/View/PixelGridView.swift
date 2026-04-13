@@ -16,10 +16,13 @@ public struct PixelGridView: View {
     public init(vm: EditorViewModel) { self.vm = vm }
 
     public var body: some View {
-        let size = vm.canvas.size   // use vm.canvas directly so SwiftUI tracks it
+        // Read activeFrame + blinkCanvas so SwiftUI subscribes to both @Published vars
+        let isBlinkFrame = vm.activeFrame == .blink
+        let activeCanvas = isBlinkFrame ? (vm.blinkCanvas ?? vm.canvas) : vm.canvas
+        let size = activeCanvas.size
         let cs = cellSize
-        // Snapshot pixels into a flat array so ForEach id changes trigger re-render
-        let pixels = vm.canvas.toHexArray()
+        // Snapshot pixels — captures canvas, blinkCanvas, and activeFrame changes
+        let pixels = activeCanvas.toHexArray()
 
         VStack(spacing: 0) {
             ForEach(0..<size, id: \.self) { y in

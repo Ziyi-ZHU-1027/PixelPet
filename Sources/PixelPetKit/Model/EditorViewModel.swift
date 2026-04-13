@@ -54,21 +54,28 @@ public final class EditorViewModel: ObservableObject {
         case .pen:
             pushUndoOnce()
             if activeFrame == .blink {
-                blinkCanvas?.setPixel(x: x, y: y, hex: currentHex)
+                // Must reassign the whole optional to trigger @Published notification
+                var b = blinkCanvas ?? PixelCanvas(size: canvas.size)
+                b.setPixel(x: x, y: y, hex: currentHex)
+                blinkCanvas = b
             } else {
                 canvas.setPixel(x: x, y: y, hex: currentHex)
             }
         case .eraser:
             pushUndoOnce()
             if activeFrame == .blink {
-                blinkCanvas?.setPixel(x: x, y: y, hex: nil)
+                var b = blinkCanvas ?? PixelCanvas(size: canvas.size)
+                b.setPixel(x: x, y: y, hex: nil)
+                blinkCanvas = b
             } else {
                 canvas.setPixel(x: x, y: y, hex: nil)
             }
         case .fill:
             pushUndoOnce()
             if activeFrame == .blink {
-                blinkCanvas?.fill(x: x, y: y, hex: currentHex)
+                var b = blinkCanvas ?? PixelCanvas(size: canvas.size)
+                b.fill(x: x, y: y, hex: currentHex)
+                blinkCanvas = b
             } else {
                 canvas.fill(x: x, y: y, hex: currentHex)
             }

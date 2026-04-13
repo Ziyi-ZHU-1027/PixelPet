@@ -27,7 +27,9 @@ public final class PetHostingView: NSHostingView<AnyView> {
     }
 
     public override func hitTest(_ point: NSPoint) -> NSView? {
-        guard isHitOnSprite(point) else { return nil }
+        // Accept clicks anywhere in the panel bounding box.
+        // Pixel-perfect hit testing is too strict for user-drawn sprites
+        // (most of the canvas may be transparent).
         return super.hitTest(point)
     }
 
@@ -110,10 +112,6 @@ public final class PetWindow: NSPanel {
     public override var canBecomeMain: Bool { false }
 
     public override func sendEvent(_ event: NSEvent) {
-        if event.type == .leftMouseDown || event.type == .rightMouseDown {
-            let pt = contentView?.convert(event.locationInWindow, from: nil) ?? event.locationInWindow
-            if contentView?.hitTest(pt) == nil { return }
-        }
         super.sendEvent(event)
     }
 }

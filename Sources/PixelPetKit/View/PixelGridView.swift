@@ -19,34 +19,25 @@ public struct PixelGridView: View {
         let size = vm.activeCanvas.size
         let cs = cellSize
 
-        Canvas { context, _ in
-            for y in 0..<size {
-                for x in 0..<size {
-                    let rect = CGRect(
-                        x: CGFloat(x) * cs,
-                        y: CGFloat(y) * cs,
-                        width: cs,
-                        height: cs
-                    )
-                    if let hex = vm.activeCanvas.pixel(x: x, y: y),
-                       let color = Color(hex: hex) {
-                        context.fill(Path(rect), with: .color(color))
-                    } else {
-                        let isEven = (x + y) % 2 == 0
-                        let checkColor: Color = isEven ? Color(white: 0.85) : Color(white: 0.95)
-                        context.fill(Path(rect), with: .color(checkColor))
-                    }
-                    context.stroke(
-                        Path(rect),
-                        with: .color(Color.orange.opacity(0.12)),
-                        lineWidth: 0.5
-                    )
-                }
+        // Use LazyVGrid instead of Canvas so each cell is a real SwiftUI view
+        // that re-renders when @Published canvas changes.
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.fixed(cs), spacing: 0), count: size),
+            spacing: 0
+        ) {
+            ForEach(0..<size * size, id: \.self) { idx in
+                let x = idx % size
+                let y = idx / size
+                PixelCell(
+                    color: cellColor(x: x, y: y),
+                    isEven: (x + y) % 2 == 0
+                )
+                .frame(width: cs, height: cs)
             }
         }
         .frame(
-            width: CGFloat(vm.activeCanvas.size) * cs,
-            height: CGFloat(vm.activeCanvas.size) * cs
+            width: CGFloat(size) * cs,
+            height: CGFloat(size) * cs
         )
         .gesture(
             DragGesture(minimumDistance: 0)
@@ -63,6 +54,24 @@ public struct PixelGridView: View {
         .onHover { inside in
             if inside { NSCursor.crosshair.push() } else { NSCursor.pop() }
         }
+    }
+
+    private func cellColor(x: Int, y: Int) -> Color? {
+        guard let hex = vm.activeCanvas.pixel(x: x, y: y) else { return nil }
+        return Color(hex: hex)
+    }
+}
+
+// MARK: - Single pixel cell
+
+private struct PixelCell: View {
+    let color: Color?
+    let isEven: Bool
+
+    var body: some View {
+        Rectangle()
+            .fill(color ?? (isEven ? Color(white: 0.85) : Color(white: 0.95)))
+            .border(Color.orange.opacity(0.12), width: 0.5)
     }
 }
 

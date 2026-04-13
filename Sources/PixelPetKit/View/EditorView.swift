@@ -192,11 +192,10 @@ public struct EditorView: View {
     private func togglePetVisible(_ pet: PetDefinition) {
         var updated = pet
         if pet.isVisible {
-            // Hide: remove from desktop
+            // Hide: close window and update store
             updated.isVisible = false
             try? PetStore.shared.update(updated)
-            // Notify PetHostManager to hide the window
-            NotificationCenter.default.post(name: .petDidHide, object: pet.id)
+            PetHostManager.shared.hide(id: pet.id)
         } else {
             // Show: spawn on desktop
             updated.isVisible = true

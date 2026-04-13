@@ -13,6 +13,7 @@ public final class PetHostManager {
         ) { [weak self] note in
             Task { @MainActor [weak self] in
                 if let id = note.object as? UUID {
+                    // window.orderOut already called by PetWindowController.hidePet()
                     self?.controllers.removeValue(forKey: id)
                 }
             }
@@ -25,6 +26,14 @@ public final class PetHostManager {
                     self?.controllers.removeValue(forKey: id)
                 }
             }
+        }
+    }
+
+    /// Hide a pet window and remove its controller.
+    public func hide(id: UUID) {
+        if let controller = controllers[id] {
+            controller.window.orderOut(nil)
+            controllers.removeValue(forKey: id)
         }
     }
 

@@ -16,49 +16,45 @@ public struct PixelGridView: View {
     public init(vm: EditorViewModel) { self.vm = vm }
 
     public var body: some View {
-        let size = vm.activeCanvas.size
+        let size = vm.canvas.size   // use vm.canvas directly so SwiftUI tracks it
         let cs = cellSize
+        // Snapshot pixels into a flat array so ForEach id changes trigger re-render
+        let pixels = vm.canvas.toHexArray()
 
-        // Use LazyVGrid instead of Canvas so each cell is a real SwiftUI view
-        // that re-renders when @Published canvas changes.
-        LazyVGrid(
-            columns: Array(repeating: GridItem(.fixed(cs), spacing: 0), count: size),
-            spacing: 0
-        ) {
-            ForEach(0..<size * size, id: \.self) { idx in
-                let x = idx % size
-                let y = idx / size
-                PixelCell(
-                    color: cellColor(x: x, y: y),
-                    isEven: (x + y) % 2 == 0
-                )
-                .frame(width: cs, height: cs)
-            }
-        }
-        .frame(
-            width: CGFloat(size) * cs,
-            height: CGFloat(size) * cs
-        )
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    let x = Int(value.location.x / cs)
-                    let y = Int(value.location.y / cs)
-                    guard x >= 0, y >= 0,
-                          x < vm.activeCanvas.size,
-                          y < vm.activeCanvas.size else { return }
-                    vm.applyTool(x: x, y: y)
+        ZStack {
+            // Grid of cells
+            VStack(spacing: 0) {
+                ForEach(0..<size, id: \.self) { y in
+                    HStack(spacing: 0) {
+                        ForEach(0..<size, id: \.self) { x in
+                            let hex = y < pixels.count && x < pixels[y].count ? pixels[y][x] : nil
+                            PixelCell(
+                                color: hex.flatMap { Color(hex: $0) },
+                                isEven: (x + y) % 2 == 0
+                            )
+                            .frame(width: cs, height: cs)
+                        }
+                    }
                 }
-        )
-        .overlay(RightClickEraserOverlay(vm: vm, cellSize: cs))
+            }
+            // Transparent gesture capture layer on top
+            Color.clear
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            let x = Int(value.location.x / cs)
+                            let y = Int(value.location.y / cs)
+                            guard x >= 0, y >= 0,
+                                  x < size, y < size else { return }
+                            vm.applyTool(x: x, y: y)
+                        }
+                )
+        }
+        .frame(width: CGFloat(size) * cs, height: CGFloat(size) * cs)
         .onHover { inside in
             if inside { NSCursor.crosshair.push() } else { NSCursor.pop() }
         }
-    }
-
-    private func cellColor(x: Int, y: Int) -> Color? {
-        guard let hex = vm.activeCanvas.pixel(x: x, y: y) else { return nil }
-        return Color(hex: hex)
     }
 }
 
@@ -72,46 +68,6 @@ private struct PixelCell: View {
         Rectangle()
             .fill(color ?? (isEven ? Color(white: 0.85) : Color(white: 0.95)))
             .border(Color.orange.opacity(0.12), width: 0.5)
-    }
-}
-
-// MARK: - Right-click erase via NSViewRepresentable
-
-private struct RightClickEraserOverlay: NSViewRepresentable {
-    let vm: EditorViewModel
-    let cellSize: CGFloat
-
-    func makeNSView(context: Context) -> RightClickView {
-        RightClickView(vm: vm, cellSize: cellSize)
-    }
-    func updateNSView(_ nsView: RightClickView, context: Context) {
-        nsView.cellSize = cellSize
-    }
-}
-
-private final class RightClickView: NSView {
-    let vm: EditorViewModel
-    var cellSize: CGFloat
-
-    init(vm: EditorViewModel, cellSize: CGFloat) {
-        self.vm = vm
-        self.cellSize = cellSize
-        super.init(frame: .zero)
-    }
-    required init?(coder: NSCoder) { fatalError() }
-
-    override func rightMouseDown(with event: NSEvent) {
-        let loc = convert(event.locationInWindow, from: nil)
-        let x = Int(loc.x / cellSize)
-        let y = Int(loc.y / cellSize)
-        let size = vm.activeCanvas.size
-        guard x >= 0, y >= 0, x < size, y < size else { return }
-        Task { @MainActor in
-            let prev = vm.currentTool
-            vm.currentTool = .eraser
-            vm.applyTool(x: x, y: y)
-            vm.currentTool = prev
-        }
     }
 }
 

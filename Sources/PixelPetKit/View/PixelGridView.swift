@@ -21,41 +21,82 @@ public struct PixelGridView: View {
         // Snapshot pixels into a flat array so ForEach id changes trigger re-render
         let pixels = vm.canvas.toHexArray()
 
-        ZStack {
-            // Grid of cells
-            VStack(spacing: 0) {
-                ForEach(0..<size, id: \.self) { y in
-                    HStack(spacing: 0) {
-                        ForEach(0..<size, id: \.self) { x in
-                            let hex = y < pixels.count && x < pixels[y].count ? pixels[y][x] : nil
-                            PixelCell(
-                                color: hex.flatMap { Color(hex: $0) },
-                                isEven: (x + y) % 2 == 0
-                            )
-                            .frame(width: cs, height: cs)
-                        }
+        VStack(spacing: 0) {
+            ForEach(0..<size, id: \.self) { y in
+                HStack(spacing: 0) {
+                    ForEach(0..<size, id: \.self) { x in
+                        let hex = y < pixels.count && x < pixels[y].count ? pixels[y][x] : nil
+                        PixelCell(
+                            color: hex.flatMap { Color(hex: $0) },
+                            isEven: (x + y) % 2 == 0
+                        )
+                        .frame(width: cs, height: cs)
                     }
                 }
             }
-            // Transparent gesture capture layer on top
-            Color.clear
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            let x = Int(value.location.x / cs)
-                            let y = Int(value.location.y / cs)
-                            guard x >= 0, y >= 0,
-                                  x < size, y < size else { return }
-                            vm.applyTool(x: x, y: y)
-                        }
-                )
         }
         .frame(width: CGFloat(size) * cs, height: CGFloat(size) * cs)
+        .background(
+            // NSView layer handles right-click; sits behind SwiftUI gesture layer
+            RightClickHandler(vm: vm, cellSize: cs)
+        )
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    let x = Int(value.location.x / cs)
+                    let y = Int(value.location.y / cs)
+                    guard x >= 0, y >= 0,
+                          x < size, y < size else { return }
+                    vm.applyTool(x: x, y: y)
+                }
+        )
         .onHover { inside in
             if inside { NSCursor.crosshair.push() } else { NSCursor.pop() }
         }
     }
+}
+
+// MARK: - Right-click handler (background NSView, does not block left-click)
+
+private struct RightClickHandler: NSViewRepresentable {
+    let vm: EditorViewModel
+    let cellSize: CGFloat
+
+    func makeNSView(context: Context) -> RightClickNSView {
+        RightClickNSView(vm: vm, cellSize: cellSize)
+    }
+    func updateNSView(_ nsView: RightClickNSView, context: Context) {
+        nsView.cellSize = cellSize
+    }
+}
+
+private final class RightClickNSView: NSView {
+    let vm: EditorViewModel
+    var cellSize: CGFloat
+
+    init(vm: EditorViewModel, cellSize: CGFloat) {
+        self.vm = vm
+        self.cellSize = cellSize
+        super.init(frame: .zero)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    // Only handle right-click; pass everything else up so SwiftUI gestures work
+    override func rightMouseDown(with event: NSEvent) {
+        let loc = convert(event.locationInWindow, from: nil)
+        let x = Int(loc.x / cellSize)
+        let y = Int(loc.y / cellSize)
+        let size = vm.canvas.size
+        guard x >= 0, y >= 0, x < size, y < size else { return }
+        Task { @MainActor in
+            let prev = vm.currentTool
+            vm.currentTool = .eraser
+            vm.applyTool(x: x, y: y)
+            vm.currentTool = prev
+        }
+    }
+
+    // Do NOT override hitTest — let SwiftUI's gesture layer receive left-clicks
 }
 
 // MARK: - Single pixel cell

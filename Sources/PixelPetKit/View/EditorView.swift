@@ -213,7 +213,7 @@ public struct EditorView: View {
             try PetStore.shared.save(pet)
             try PetStore.shared.savePNGs(id: pet.id, normal: normalImage, blink: blinkImage)
             loadPets()
-            // PetHostManager.shared.spawn(pet) — wired in Plan 3
+            PetHostManager.shared.spawn(pet)
         } catch {
             print("Failed to save pet: \(error)")
         }

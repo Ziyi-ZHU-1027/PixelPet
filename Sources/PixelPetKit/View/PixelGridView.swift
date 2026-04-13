@@ -49,6 +49,9 @@ public struct PixelGridView: View {
                           x < size, y < size else { return }
                     vm.applyTool(x: x, y: y)
                 }
+                .onEnded { _ in
+                    vm.endStroke()
+                }
         )
         .onHover { inside in
             if inside { NSCursor.crosshair.push() } else { NSCursor.pop() }
@@ -56,14 +59,16 @@ public struct PixelGridView: View {
     }
 }
 
-// MARK: - Right-click handler (background NSView, does not block left-click)
+// MARK: - Right-click handler
+// Uses NSEvent local monitor so coordinate conversion is always accurate.
 
 private struct RightClickHandler: NSViewRepresentable {
     let vm: EditorViewModel
     let cellSize: CGFloat
 
     func makeNSView(context: Context) -> RightClickNSView {
-        RightClickNSView(vm: vm, cellSize: cellSize)
+        let v = RightClickNSView(vm: vm, cellSize: cellSize)
+        return v
     }
     func updateNSView(_ nsView: RightClickNSView, context: Context) {
         nsView.cellSize = cellSize
@@ -73,6 +78,7 @@ private struct RightClickHandler: NSViewRepresentable {
 private final class RightClickNSView: NSView {
     let vm: EditorViewModel
     var cellSize: CGFloat
+    private var monitor: Any?
 
     init(vm: EditorViewModel, cellSize: CGFloat) {
         self.vm = vm
@@ -81,11 +87,28 @@ private final class RightClickNSView: NSView {
     }
     required init?(coder: NSCoder) { fatalError() }
 
-    // Only handle right-click; pass everything else up so SwiftUI gestures work
-    override func rightMouseDown(with event: NSEvent) {
-        let loc = convert(event.locationInWindow, from: nil)
-        let x = Int(loc.x / cellSize)
-        let y = Int(loc.y / cellSize)
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        // Install local monitor when we have a window
+        if window != nil, monitor == nil {
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) { [weak self] event in
+                self?.handleRightClick(event)
+                return event  // pass event through so system menu still works
+            }
+        } else if window == nil {
+            if let m = monitor { NSEvent.removeMonitor(m); monitor = nil }
+        }
+    }
+
+    private func handleRightClick(_ event: NSEvent) {
+        // Convert screen point to our view's coordinate space
+        guard let win = window else { return }
+        let winPt = win.convertPoint(fromScreen: NSEvent.mouseLocation)
+        let viewPt = convert(winPt, from: nil)
+        // Check the point is inside our bounds
+        guard bounds.contains(viewPt) else { return }
+        let x = Int(viewPt.x / cellSize)
+        let y = Int((bounds.height - viewPt.y) / cellSize)  // flip Y (NSView origin bottom-left)
         let size = vm.canvas.size
         guard x >= 0, y >= 0, x < size, y < size else { return }
         Task { @MainActor in
@@ -95,8 +118,6 @@ private final class RightClickNSView: NSView {
             vm.currentTool = prev
         }
     }
-
-    // Do NOT override hitTest — let SwiftUI's gesture layer receive left-clicks
 }
 
 // MARK: - Single pixel cell

@@ -25,6 +25,8 @@ public final class EditorViewModel: ObservableObject {
     private var undoStack: [PixelCanvas] = []
     private var redoStack: [PixelCanvas] = []
     private let maxUndoDepth = 50
+    // Throttle: only push undo snapshot once per gesture stroke
+    private var didPushForCurrentStroke = false
 
     // MARK: - Init
     public init(size: Int = 32) {
@@ -50,21 +52,21 @@ public final class EditorViewModel: ObservableObject {
     public func applyTool(x: Int, y: Int) {
         switch currentTool {
         case .pen:
-            pushUndo()
+            pushUndoOnce()
             if activeFrame == .blink {
                 blinkCanvas?.setPixel(x: x, y: y, hex: currentHex)
             } else {
                 canvas.setPixel(x: x, y: y, hex: currentHex)
             }
         case .eraser:
-            pushUndo()
+            pushUndoOnce()
             if activeFrame == .blink {
                 blinkCanvas?.setPixel(x: x, y: y, hex: nil)
             } else {
                 canvas.setPixel(x: x, y: y, hex: nil)
             }
         case .fill:
-            pushUndo()
+            pushUndoOnce()
             if activeFrame == .blink {
                 blinkCanvas?.fill(x: x, y: y, hex: currentHex)
             } else {
@@ -76,6 +78,11 @@ public final class EditorViewModel: ObservableObject {
             }
             currentTool = .pen
         }
+    }
+
+    /// Call when a stroke ends (DragGesture.onEnded) to allow next stroke to push undo.
+    public func endStroke() {
+        didPushForCurrentStroke = false
     }
 
     // MARK: - Canvas size
@@ -104,7 +111,10 @@ public final class EditorViewModel: ObservableObject {
     public var canUndo: Bool { !undoStack.isEmpty }
     public var canRedo: Bool { !redoStack.isEmpty }
 
-    private func pushUndo() {
+    /// Push undo snapshot only once per stroke (throttled).
+    private func pushUndoOnce() {
+        guard !didPushForCurrentStroke else { return }
+        didPushForCurrentStroke = true
         undoStack.append(canvas)
         if undoStack.count > maxUndoDepth { undoStack.removeFirst() }
         redoStack.removeAll()

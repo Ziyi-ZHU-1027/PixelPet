@@ -17,6 +17,8 @@ public struct EditorView: View {
                 canvasArea
                 RightPanelView(vm: vm, pets: $pets) { pet in
                     loadPetForEditing(pet)
+                } onToggleVisible: { pet in
+                    togglePetVisible(pet)
                 }
             }
 
@@ -185,6 +187,23 @@ public struct EditorView: View {
 
     private func loadPets() {
         pets = (try? PetStore.shared.loadAll()) ?? []
+    }
+
+    private func togglePetVisible(_ pet: PetDefinition) {
+        var updated = pet
+        if pet.isVisible {
+            // Hide: remove from desktop
+            updated.isVisible = false
+            try? PetStore.shared.update(updated)
+            // Notify PetHostManager to hide the window
+            NotificationCenter.default.post(name: .petDidHide, object: pet.id)
+        } else {
+            // Show: spawn on desktop
+            updated.isVisible = true
+            try? PetStore.shared.update(updated)
+            PetHostManager.shared.spawn(updated)
+        }
+        loadPets()
     }
 
     private func loadPetForEditing(_ pet: PetDefinition) {

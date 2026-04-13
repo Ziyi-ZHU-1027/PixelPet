@@ -4,6 +4,7 @@ public struct RightPanelView: View {
     @ObservedObject var vm: EditorViewModel
     @Binding var pets: [PetDefinition]
     let onSelectPet: (PetDefinition) -> Void
+    let onToggleVisible: (PetDefinition) -> Void
 
     private let palette: [String] = [
         "#E63946", "#F97316", "#FFD166", "#06D6A0", "#118AB2",
@@ -13,10 +14,12 @@ public struct RightPanelView: View {
 
     public init(vm: EditorViewModel,
                 pets: Binding<[PetDefinition]>,
-                onSelectPet: @escaping (PetDefinition) -> Void) {
+                onSelectPet: @escaping (PetDefinition) -> Void,
+                onToggleVisible: @escaping (PetDefinition) -> Void) {
         self.vm = vm
         self._pets = pets
         self.onSelectPet = onSelectPet
+        self.onToggleVisible = onToggleVisible
     }
 
     public var body: some View {
@@ -174,7 +177,11 @@ public struct RightPanelView: View {
                     .foregroundColor(.secondary)
             } else {
                 ForEach(pets) { pet in
-                    PetListRow(pet: pet, onTap: { onSelectPet(pet) })
+                    PetListRow(
+                        pet: pet,
+                        onTap: { onSelectPet(pet) },
+                        onToggleVisible: { onToggleVisible(pet) }
+                    )
                 }
             }
         }
@@ -191,30 +198,46 @@ public struct RightPanelView: View {
 private struct PetListRow: View {
     let pet: PetDefinition
     let onTap: () -> Void
+    let onToggleVisible: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.orange.opacity(0.3))
-                    .frame(width: 24, height: 24)
-                Text(pet.name)
-                    .font(.custom("VT323", size: 20))
-                    .foregroundColor(Color(hex: "#1A1A2E")!)
-                Spacer()
-                Circle()
-                    .fill(pet.isVisible ? Color(hex: "#06D6A0")! : Color.gray)
-                    .frame(width: 10, height: 10)
-                    .shadow(color: pet.isVisible ? Color(hex: "#06D6A0")!.opacity(0.6) : .clear,
-                            radius: 3)
+        HStack(spacing: 6) {
+            // Left: tap to edit
+            Button(action: onTap) {
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.orange.opacity(0.3))
+                        .frame(width: 24, height: 24)
+                    Text(pet.name)
+                        .font(.custom("VT323", size: 20))
+                        .foregroundColor(Color(hex: "#1A1A2E")!)
+                    Spacer()
+                }
+                .padding(.horizontal, 10).padding(.vertical, 8)
+                .background(Color(hex: "#FFF7ED")!)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: "#F97316")!, lineWidth: 2.5))
+                .shadow(color: Color(hex: "#9A3412")!.opacity(0.4), radius: 0, x: 2, y: 2)
             }
-            .padding(.horizontal, 10).padding(.vertical, 8)
-            .background(Color(hex: "#FFF7ED")!)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: "#F97316")!, lineWidth: 2.5))
-            .shadow(color: Color(hex: "#9A3412")!.opacity(0.4), radius: 0, x: 2, y: 2)
+            .buttonStyle(.plain)
+
+            // Right: tap dot to toggle visible/hidden
+            Button(action: onToggleVisible) {
+                ZStack {
+                    Circle()
+                        .fill(pet.isVisible ? Color(hex: "#06D6A0")! : Color(hex: "#CCCCCC")!)
+                        .frame(width: 22, height: 22)
+                        .shadow(color: pet.isVisible ? Color(hex: "#06D6A0")!.opacity(0.5) : .clear,
+                                radius: 4)
+                    // Eye icon hint
+                    Image(systemName: pet.isVisible ? "eye.fill" : "eye.slash.fill")
+                        .font(.system(size: 9))
+                        .foregroundColor(.white)
+                }
+            }
+            .buttonStyle(.plain)
+            .help(pet.isVisible ? "点击隐藏宠物" : "点击召唤宠物到桌面")
         }
-        .buttonStyle(.plain)
     }
 }
 

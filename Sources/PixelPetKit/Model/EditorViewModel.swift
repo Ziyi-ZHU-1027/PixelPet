@@ -39,7 +39,8 @@ public final class EditorViewModel: ObservableObject {
 
     public func addBlinkFrame() {
         guard blinkCanvas == nil else { return }
-        blinkCanvas = PixelCanvas(size: canvas.size)
+        // Copy normal frame as starting point so user only needs to modify the eyes
+        blinkCanvas = PixelCanvas.from(hexArray: canvas.toHexArray(), size: canvas.size)
         activeFrame = .blink
     }
 

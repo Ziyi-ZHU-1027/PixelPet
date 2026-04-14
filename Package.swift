@@ -4,6 +4,12 @@ import PackageDescription
 let package = Package(
     name: "PixelPet",
     platforms: [.macOS(.v13)],
+    dependencies: [
+        .package(
+            url: "https://github.com/sparkle-project/Sparkle",
+            from: "2.0.0"
+        ),
+    ],
     targets: [
         .target(
             name: "PixelPetKit",
@@ -11,7 +17,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "PixelPetApp",
-            dependencies: ["PixelPetKit"],
+            dependencies: [
+                "PixelPetKit",
+                .product(name: "Sparkle", package: "Sparkle"),
+            ],
             path: "Sources/PixelPetApp"
         ),
         .testTarget(

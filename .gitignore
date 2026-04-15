@@ -6,3 +6,8 @@
 xcuserdata/
 *.xcworkspace/xcuserdata/
 .superpowers/
+docs/superpowers/
+*.zip
+*.app/
+.vscode/
+.swiftpm/

@@ -76,7 +76,7 @@
     .ditto-canvas-wrap {
       position: relative;
       width: 160px;
-      height: 160px;
+      height: 220px;   /* 加高，给跳跃留空间 */
       margin: 0 auto;
     }
 
@@ -520,7 +520,11 @@
 // ── 百变怪交互动画 ──
 const canvas = document.getElementById('dittoCanvas');
 const ctx = canvas.getContext('2d');
-const W = 160, H = 160;
+const W = 160, H = 220;  // 加高给跳跃留空间
+canvas.width = W;
+canvas.height = H;
+const IMG_SIZE = 160;                // 图片本身大小
+const IMG_BASE_Y = H - IMG_SIZE;     // 图片默认 Y（贴底）= 60
 
 // 加载图片
 const img = new Image();
@@ -541,7 +545,7 @@ function spawnHearts() {
   for (let i = 0; i < 6; i++) {
     hearts.push({
       x: W / 2 + (Math.random() - 0.5) * 60,
-      y: H / 2,
+      y: IMG_BASE_Y + IMG_SIZE * 0.4,  // 从百变怪中部冒出
       vx: (Math.random() - 0.5) * 3,
       vy: -(2 + Math.random() * 2.5),
       alpha: 1,
@@ -585,8 +589,10 @@ function draw(ts) {
 
   // 跳跃物理
   if (isJumping) {
-    jumpVY += 1.2;   // 重力
+    jumpVY += 1.2;
     jumpY += jumpVY;
+    // 不超出顶部（IMG_BASE_Y = 60px 的跳跃空间）
+    if (jumpY < -IMG_BASE_Y) { jumpY = -IMG_BASE_Y; jumpVY = 0; }
     if (jumpY >= 0) {
       jumpY = 0;
       jumpVY = 0;
@@ -594,29 +600,31 @@ function draw(ts) {
     }
   }
 
-  const totalY = floatY + jumpY;
+  // 图片 Y = 基础位置 + 浮动 + 跳跃（跳跃向上是负数，不会超出顶部）
+  const imgY = IMG_BASE_Y + floatY + jumpY;
 
-  // 画百变怪（图片加载完才画）
+  // 画百变怪
   if (img.complete && img.naturalWidth > 0) {
     ctx.save();
     ctx.shadowColor = 'rgba(249,115,22,0.5)';
     ctx.shadowBlur = 16;
-    ctx.drawImage(img, 0, totalY, W, H);
+    ctx.drawImage(img, 0, imgY, IMG_SIZE, IMG_SIZE);
     ctx.restore();
   }
 
-  // 画爱心粒子
+  // 画爱心粒子（粉色）
   for (let i = hearts.length - 1; i >= 0; i--) {
     const h = hearts[i];
     h.x += h.vx;
     h.y += h.vy;
-    h.vy += 0.04;    // 轻微重力
+    h.vy += 0.04;
     h.alpha -= 1 / h.life;
     h.life--;
     if (h.life <= 0) { hearts.splice(i, 1); continue; }
 
     ctx.save();
     ctx.globalAlpha = Math.max(0, h.alpha);
+    ctx.fillStyle = '#ff6b9d';   // 粉色爱心
     ctx.font = `${h.size}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';

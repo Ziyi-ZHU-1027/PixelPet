@@ -9,9 +9,10 @@ public final class PetWindowController {
     public var pet: PetDefinition
 
     private var wanderTarget: CGPoint? = nil
-    private var wanderPauseTicks = 0
     private var wanderTimer: Timer?
-    private var distanceSinceLastHop: CGFloat = 0  // hop every N px for rhythmic feel
+    // Hop-driven movement: each jump moves the pet one step toward target
+    private let hopStepSize: CGFloat = 40   // px moved per jump
+    private var isWaitingToHop = false      // waiting for pause before next hop
 
     public var windowOrigin: NSPoint {
         window.frame.origin
@@ -125,54 +126,46 @@ public final class PetWindowController {
     // MARK: - Wandering
 
     private func startWandering() {
-        guard wanderTimer == nil else { return }
-        wanderTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.wanderTick() }
+        // Wire the jump-landed callback so movement is driven by hops
+        animator.onJumpLanded = { [weak self] in
+            self?.onHopLanded()
         }
-        RunLoop.main.add(wanderTimer!, forMode: .common)
+        // Kick off the first hop
+        scheduleNextHop(delay: 0.3)
     }
 
     private func stopWandering() {
         wanderTimer?.invalidate()
         wanderTimer = nil
         wanderTarget = nil
-        wanderPauseTicks = 0
+        isWaitingToHop = false
+        animator.onJumpLanded = nil
     }
 
     private func pauseWandering() {
         wanderTimer?.invalidate()
         wanderTimer = nil
+        isWaitingToHop = false
     }
 
     private func resumeWandering() {
-        if pet.isWandering { startWandering() }
+        if pet.isWandering {
+            startWandering()
+        }
     }
 
-    private func wanderTick() {
+    /// Called by PetAnimator when a jump animation finishes landing.
+    private func onHopLanded() {
+        guard pet.isWandering else { return }
+
+        // Save current position
         let origin = window.frame.origin
         pet.lastPositionX = origin.x
         pet.lastPositionY = origin.y
 
-        if wanderPauseTicks > 0 {
-            wanderPauseTicks -= 1
-            return
-        }
-
-        guard let screen = NSScreen.main else { return }
-        let screenFrame = screen.visibleFrame
-        let panelSize = window.frame.size
-
+        // Pick a new target if needed
         if wanderTarget == nil {
-            let margin: CGFloat = 20
-            let maxX = screenFrame.maxX - panelSize.width - margin
-            let maxY = screenFrame.maxY - panelSize.height - margin
-            let minX = screenFrame.minX + margin
-            let minY = screenFrame.minY + margin
-            guard maxX > minX, maxY > minY else { return }
-            wanderTarget = CGPoint(
-                x: CGFloat.random(in: minX...maxX),
-                y: CGFloat.random(in: minY...maxY)
-            )
+            wanderTarget = randomTarget()
         }
 
         guard let target = wanderTarget else { return }
@@ -181,28 +174,51 @@ public final class PetWindowController {
         let dy = target.y - current.y
         let dist = sqrt(dx * dx + dy * dy)
 
-        let speed: CGFloat = 3.0   // fixed speed for consistent hop rhythm
-        let hopEvery: CGFloat = 28 // trigger a jump every 28px moved
-
-        if dist < speed {
-            // Arrived at target
+        if dist < hopStepSize {
+            // Close enough — snap to target, pick next one after a pause
             window.setFrameOrigin(target)
             wanderTarget = nil
-            distanceSinceLastHop = 0
-            // Pause briefly then pick next target
-            wanderPauseTicks = Int.random(in: 8...20)
-            animator.triggerJump()
+            scheduleNextHop(delay: Double.random(in: 0.6...1.5))
         } else {
-            let nx = current.x + (dx / dist) * speed
-            let ny = current.y + (dy / dist) * speed
+            // Move one hop-step toward target, then wait before next hop
+            let nx = current.x + (dx / dist) * hopStepSize
+            let ny = current.y + (dy / dist) * hopStepSize
             window.setFrameOrigin(NSPoint(x: nx, y: ny))
-            distanceSinceLastHop += speed
-            // Hop every hopEvery pixels → rhythmic "hop hop hop" feel
-            if distanceSinceLastHop >= hopEvery {
-                distanceSinceLastHop = 0
-                animator.triggerJump()
+            scheduleNextHop(delay: Double.random(in: 0.05...0.15))
+        }
+    }
+
+    /// Schedule the next jump after a delay (gives a natural pause between hops).
+    private func scheduleNextHop(delay: Double) {
+        guard pet.isWandering, !isWaitingToHop else { return }
+        isWaitingToHop = true
+        wanderTimer?.invalidate()
+        wanderTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.pet.isWandering else { return }
+                self.isWaitingToHop = false
+                self.animator.triggerJump()
+                // onHopLanded will be called by PetAnimator when jump finishes
             }
         }
+        RunLoop.main.add(wanderTimer!, forMode: .common)
+    }
+
+    /// Pick a random on-screen target within screen bounds.
+    private func randomTarget() -> CGPoint? {
+        guard let screen = NSScreen.main else { return nil }
+        let f = screen.visibleFrame
+        let p = window.frame.size
+        let margin: CGFloat = 20
+        let maxX = f.maxX - p.width - margin
+        let maxY = f.maxY - p.height - margin
+        let minX = f.minX + margin
+        let minY = f.minY + margin
+        guard maxX > minX, maxY > minY else { return nil }
+        return CGPoint(
+            x: CGFloat.random(in: minX...maxX),
+            y: CGFloat.random(in: minY...maxY)
+        )
     }
 
     public func savePosition() {

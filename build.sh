@@ -7,7 +7,7 @@ swift build -c release
 APP_NAME="PixelPet"
 APP_DIR="${APP_NAME}.app"
 EXECUTABLE=".build/release/PixelPetApp"
-VERSION="1.0.0"  # ← 每次发版前改这里
+VERSION="1.0.1"  # ← 每次发版前改这里
 
 # 签名方式：
 #   现在（免费）:        SIGN_IDENTITY="-"

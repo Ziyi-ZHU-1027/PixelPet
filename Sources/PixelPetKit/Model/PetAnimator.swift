@@ -24,6 +24,10 @@ public final class PetAnimator: ObservableObject {
     public private(set) var isJumping = false
     public private(set) var isWandering = false
 
+    /// Called when a jump animation completes (jumpTick reaches end).
+    /// Used by PetWindowController to move the window on landing.
+    public var onJumpLanded: (() -> Void)?
+
     private var isBlinking = false
     private var tapCount = 0
     private var timer: Timer?
@@ -76,6 +80,7 @@ public final class PetAnimator: ObservableObject {
                 isJumping = false
                 jumpOffset = 0
                 jumpTick = 0
+                onJumpLanded?()  // notify controller: jump complete, move now
             }
         }
 

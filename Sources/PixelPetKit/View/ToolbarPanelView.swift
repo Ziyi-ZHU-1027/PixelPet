@@ -10,7 +10,7 @@ public struct ToolbarPanelView: View {
             toolButton(tool: .pen, icon: "pencil")
             toolButton(tool: .eraser, icon: "eraser")
             toolButton(tool: .fill, icon: "paintbucket")
-            // eyedropper moved to current color section in RightPanelView
+            toolButton(tool: .eyedropper, icon: "eyedropper")
 
             Divider()
                 .frame(width: 36)

@@ -216,7 +216,9 @@ public struct RightPanelView: View {
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(hex: "#F97316")!, lineWidth: 2.5))
     }
 
-    // MARK: - Current color + eyedropper
+    // MARK: - Current color + system color picker
+
+    @State private var pickerBinding: Color = Color(hex: "#E63946") ?? .red
 
     private var currentColorSection: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -250,20 +252,25 @@ public struct RightPanelView: View {
 
                 Spacer()
 
-                // Eyedropper button — now lives here, not in toolbar
-                Button {
-                    vm.currentTool = .eyedropper
-                } label: {
-                    Image(systemName: "eyedropper")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(vm.currentTool == .eyedropper ? .white : Color(hex: "#F97316")!)
-                }
-                .frame(width: 34, height: 34)
-                .background(vm.currentTool == .eyedropper ? Color(hex: "#F97316")! : Color(hex: "#FFF7ED")!)
-                .clipShape(RoundedRectangle(cornerRadius: 9))
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color(hex: "#F97316")!, lineWidth: 2.5))
-                .shadow(color: Color(hex: "#9A3412")!.opacity(0.4), radius: 0, x: 2, y: 2)
+                // System color picker — opens Apple's native color panel
+                ColorPicker("", selection: $pickerBinding, supportsOpacity: false)
+                    .labelsHidden()
+                    .frame(width: 34, height: 34)
+                    .onChange(of: pickerBinding) { newColor in
+                        if let hex = newColor.toHex() {
+                            vm.currentHex = hex
+                            vm.recordHistory(hex)
+                        }
+                    }
             }
+        }
+        .onAppear {
+            // Sync picker to current color on appear
+            if let c = Color(hex: vm.currentHex) { pickerBinding = c }
+        }
+        .onChange(of: vm.currentHex) { newHex in
+            // Keep picker in sync when color changes from palette
+            if let c = Color(hex: newHex) { pickerBinding = c }
         }
     }
 
@@ -361,9 +368,6 @@ public struct RightPanelView: View {
                         )
                 }
                 .buttonStyle(.plain)
-
-                // Custom picker
-                ColorPickerButton(selectedHex: $vm.currentHex, onPick: { vm.recordHistory($0) })
             }
         }
     }

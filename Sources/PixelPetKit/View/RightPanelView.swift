@@ -301,31 +301,36 @@ public struct RightPanelView: View {
     }
 
     private var historyRow: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        // 面板可用宽度 = 210 - 14*2 = 182px
+        // 8格: 每格 20px + 间距 3px × 7 = 181px，刚好放下
+        let columns = Array(repeating: GridItem(.fixed(20), spacing: 3), count: 8)
+        return VStack(alignment: .leading, spacing: 4) {
             Text("最近用过")
                 .font(.custom("VT323", size: 15))
                 .foregroundColor(Color(hex: "#9A3412")!).opacity(0.6)
-            HStack(spacing: 4) {
+            LazyVGrid(columns: columns, spacing: 3) {
                 ForEach(vm.colorHistory, id: \.self) { hex in
                     Button {
                         vm.currentHex = hex
                     } label: {
-                        RoundedRectangle(cornerRadius: 5)
+                        RoundedRectangle(cornerRadius: 4)
                             .fill(swatchColor(hex))
-                            .frame(width: 22, height: 22)
+                            .frame(width: 20, height: 20)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 5)
+                                RoundedRectangle(cornerRadius: 4)
                                     .stroke(vm.currentHex == hex ? Color(hex: "#1A1A2E")! : Color.black.opacity(0.1),
                                             lineWidth: vm.currentHex == hex ? 2.5 : 1.5)
                             )
                     }
                     .buttonStyle(.plain)
+                    .help(hex.uppercased())
                 }
                 // Empty slots
                 ForEach(0..<(8 - vm.colorHistory.count), id: \.self) { _ in
-                    RoundedRectangle(cornerRadius: 5)
-                        .strokeBorder(Color(hex: "#9A3412")!.opacity(0.2), style: StrokeStyle(lineWidth: 1.5, dash: [3]))
-                        .frame(width: 22, height: 22)
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(Color(hex: "#9A3412")!.opacity(0.2),
+                                      style: StrokeStyle(lineWidth: 1.5, dash: [3]))
+                        .frame(width: 20, height: 20)
                 }
             }
         }

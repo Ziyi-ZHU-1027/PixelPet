@@ -104,6 +104,33 @@ public let perlerSeries: [(letter: String, name: String, colors: [PerlerColor])]
     ]),
 ]
 
+// 全局 hex→PerlerColor 查找表，避免每次线性扫描
+private let perlerHexLookup: [String: String] = {
+    var map: [String: String] = [:]
+    for series in perlerSeries {
+        for pc in series.colors {
+            map[pc.hex.uppercased()] = pc.id
+        }
+    }
+    return map
+}()
+
+// MARK: - Design tokens
+private let panelWidth: CGFloat = 210
+private let panelPadding: CGFloat = 12
+private let contentWidth: CGFloat = panelWidth - panelPadding * 2  // 186
+
+// Normal palette: 5 cols, each 28px, gap 5px → 5*28 + 4*5 = 160px ✓
+private let normalSwatchSize: CGFloat = 28
+private let normalSwatchGap: CGFloat  = 5
+private let normalCols = 5
+
+// Perler swatches: fit as many 22px cols as possible in contentWidth
+// 8 cols: 8*22 + 7*4 = 204 > 186, try 7: 7*22 + 6*4 = 178 ✓
+private let perlerSwatchSize: CGFloat = 22
+private let perlerSwatchGap: CGFloat  = 4
+private let perlerCols = 7   // 7*22 + 6*4 = 178px, fits in 186px
+
 // MARK: - RightPanelView
 
 public struct RightPanelView: View {
@@ -112,15 +139,14 @@ public struct RightPanelView: View {
     let onSelectPet: (PetDefinition) -> Void
     let onToggleVisible: (PetDefinition) -> Void
 
-    // Normal palette
     private let normalPalette: [String] = [
         "#E63946", "#F97316", "#FFD166", "#06D6A0", "#118AB2",
         "#7C6AF7", "#FF6B9D", "#F4A261", "#2A2A2A", "#FFFFFF",
         "#AAAAAA", "#A8DADC", "#457B9D",
     ]
 
-    // Which perler series is expanded
     @State private var expandedSeries: String? = nil
+    @State private var pickerColor: Color = Color(hex: "#E63946") ?? .red
 
     public init(vm: EditorViewModel,
                 pets: Binding<[PetDefinition]>,
@@ -133,16 +159,19 @@ public struct RightPanelView: View {
     }
 
     public var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 12) {
                 sizeSection
+                Divider().background(Color(hex: "#F97316")!.opacity(0.3))
                 currentColorSection
+                Divider().background(Color(hex: "#F97316")!.opacity(0.3))
                 paletteSection
+                Divider().background(Color(hex: "#F97316")!.opacity(0.3))
                 petListSection
             }
-            .padding(14)
+            .padding(panelPadding)
         }
-        .frame(width: 210)
+        .frame(width: panelWidth)
         .background(Color(hex: "#FDECD3")!)
         .overlay(
             Rectangle()
@@ -150,14 +179,20 @@ public struct RightPanelView: View {
                 .foregroundColor(Color(hex: "#F97316")!),
             alignment: .leading
         )
+        .onAppear { syncPicker() }
+        .onChange(of: vm.currentHex) { _ in syncPicker() }
     }
 
-    // MARK: - Size selector
+    private func syncPicker() {
+        if let c = Color(hex: vm.currentHex) { pickerColor = c }
+    }
+
+    // MARK: - Size
 
     private var sizeSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             sectionTitle("画布尺寸")
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 sizeButton(15)
                 sizeButton(25)
                 sizeButton(32)
@@ -176,11 +211,12 @@ public struct RightPanelView: View {
         }
         .font(.custom("Press Start 2P", size: 7))
         .padding(.horizontal, 8).padding(.vertical, 6)
+        .frame(maxWidth: .infinity)
         .background(isActive ? Color(hex: "#F97316")! : Color(hex: "#FFF7ED")!)
         .foregroundColor(isActive ? .white : Color(hex: "#F97316")!)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "#F97316")!, lineWidth: 2.5))
-        .shadow(color: Color(hex: "#9A3412")!.opacity(0.4), radius: 0, x: 2, y: 2)
+        .clipShape(RoundedRectangle(cornerRadius: 7))
+        .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color(hex: "#F97316")!, lineWidth: 2))
+        .shadow(color: Color(hex: "#9A3412")!.opacity(0.3), radius: 0, x: 2, y: 2)
     }
 
     private var sizeConfirmBanner: some View {
@@ -190,10 +226,7 @@ public struct RightPanelView: View {
                 .foregroundColor(Color(hex: "#9A3412")!)
             HStack(spacing: 6) {
                 Button("确定清空") {
-                    if let s = vm.pendingSize {
-                        vm.changeSize(s)
-                        vm.pendingSize = nil
-                    }
+                    if let s = vm.pendingSize { vm.changeSize(s); vm.pendingSize = nil }
                 }
                 .font(.custom("Press Start 2P", size: 7))
                 .padding(.horizontal, 8).padding(.vertical, 5)
@@ -212,51 +245,53 @@ public struct RightPanelView: View {
         }
         .padding(8)
         .background(Color(hex: "#FFF3CD")!)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(hex: "#F97316")!, lineWidth: 2.5))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "#F97316")!, lineWidth: 2))
     }
 
-    // MARK: - Current color + system color picker
-
-    @State private var pickerBinding: Color = Color(hex: "#E63946") ?? .red
+    // MARK: - Current color
 
     private var currentColorSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             sectionTitle("当前颜色")
-            HStack(spacing: 8) {
-                // Color swatch
-                RoundedRectangle(cornerRadius: 10)
+            HStack(spacing: 10) {
+                // Color preview swatch
+                RoundedRectangle(cornerRadius: 8)
                     .fill(swatchColor(vm.currentHex))
-                    .frame(width: 34, height: 34)
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(hex: "#9A3412")!, lineWidth: 3))
-                    .shadow(color: Color(hex: "#9A3412")!.opacity(0.5), radius: 0, x: 3, y: 3)
+                    .frame(width: 36, height: 36)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "#9A3412")!, lineWidth: 2.5))
+                    .shadow(color: Color(hex: "#9A3412")!.opacity(0.4), radius: 0, x: 2, y: 2)
 
-                // Label
-                VStack(alignment: .leading, spacing: 1) {
+                // Labels
+                VStack(alignment: .leading, spacing: 2) {
+                    // 如果是拼豆色且能找到色号，同时显示色号和 hex
                     if vm.paletteMode == .perler,
-                       let pc = perlerCodeForHex(vm.currentHex) {
-                        Text(pc)
+                       let code = perlerHexLookup[vm.currentHex.uppercased()] {
+                        Text(code)
                             .font(.custom("VT323", size: 20))
                             .foregroundColor(Color(hex: "#1A1A2E")!)
                             .fontWeight(.bold)
+                            .lineLimit(1)
                         Text(vm.currentHex.uppercased())
-                            .font(.custom("VT323", size: 13))
-                            .foregroundColor(Color(hex: "#9A3412")!).opacity(0.7)
+                            .font(.custom("VT323", size: 15))
+                            .foregroundColor(Color(hex: "#9A3412")!)
+                            .lineLimit(1)
                     } else {
-                        Text(vm.currentHex.uppercased())
+                        Text(vm.currentHex == "transparent" ? "透明" : vm.currentHex.uppercased())
                             .font(.custom("VT323", size: 20))
                             .foregroundColor(Color(hex: "#1A1A2E")!)
                             .fontWeight(.bold)
+                            .lineLimit(1)
                     }
                 }
 
-                Spacer()
+                Spacer(minLength: 0)
 
-                // System color picker — opens Apple's native color panel
-                ColorPicker("", selection: $pickerBinding, supportsOpacity: false)
+                // System color picker button
+                ColorPicker("", selection: $pickerColor, supportsOpacity: false)
                     .labelsHidden()
-                    .frame(width: 34, height: 34)
-                    .onChange(of: pickerBinding) { newColor in
+                    .frame(width: 32, height: 32)
+                    .onChange(of: pickerColor) { newColor in
                         if let hex = newColor.toHex() {
                             vm.currentHex = hex
                             vm.recordHistory(hex)
@@ -264,23 +299,15 @@ public struct RightPanelView: View {
                     }
             }
         }
-        .onAppear {
-            // Sync picker to current color on appear
-            if let c = Color(hex: vm.currentHex) { pickerBinding = c }
-        }
-        .onChange(of: vm.currentHex) { newHex in
-            // Keep picker in sync when color changes from palette
-            if let c = Color(hex: newHex) { pickerBinding = c }
-        }
     }
 
-    // MARK: - Palette section
+    // MARK: - Palette
 
     private var paletteSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionTitle("调色盘")
 
-            // History row
+            // History
             if !vm.colorHistory.isEmpty {
                 historyRow
             }
@@ -291,7 +318,6 @@ public struct RightPanelView: View {
                 modeTab("拼豆色", mode: .perler)
             }
 
-            // Content
             if vm.paletteMode == .normal {
                 normalPaletteView
             } else {
@@ -300,39 +326,45 @@ public struct RightPanelView: View {
         }
     }
 
+    // History: 最多8个，固定一行，用 HStack 均分
     private var historyRow: some View {
-        // 面板可用宽度 = 210 - 14*2 = 182px
-        // 8格: 每格 20px + 间距 3px × 7 = 181px，刚好放下
-        let columns = Array(repeating: GridItem(.fixed(20), spacing: 3), count: 8)
-        return VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 4) {
             Text("最近用过")
-                .font(.custom("VT323", size: 15))
-                .foregroundColor(Color(hex: "#9A3412")!).opacity(0.6)
-            LazyVGrid(columns: columns, spacing: 3) {
+                .font(.custom("VT323", size: 14))
+                .foregroundColor(Color(hex: "#9A3412")!.opacity(0.6))
+            // 8格均分 contentWidth，每格约 20px
+            HStack(spacing: 3) {
                 ForEach(vm.colorHistory, id: \.self) { hex in
                     Button {
                         vm.currentHex = hex
                     } label: {
                         RoundedRectangle(cornerRadius: 4)
                             .fill(swatchColor(hex))
-                            .frame(width: 20, height: 20)
+                            .frame(height: 20)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 4)
-                                    .stroke(vm.currentHex == hex ? Color(hex: "#1A1A2E")! : Color.black.opacity(0.1),
-                                            lineWidth: vm.currentHex == hex ? 2.5 : 1.5)
+                                    .stroke(
+                                        vm.currentHex == hex
+                                            ? Color(hex: "#1A1A2E")!
+                                            : Color.black.opacity(0.15),
+                                        lineWidth: vm.currentHex == hex ? 2 : 1
+                                    )
                             )
                     }
                     .buttonStyle(.plain)
                     .help(hex.uppercased())
                 }
-                // Empty slots
+                // 空槽
                 ForEach(0..<(8 - vm.colorHistory.count), id: \.self) { _ in
                     RoundedRectangle(cornerRadius: 4)
-                        .strokeBorder(Color(hex: "#9A3412")!.opacity(0.2),
-                                      style: StrokeStyle(lineWidth: 1.5, dash: [3]))
-                        .frame(width: 20, height: 20)
+                        .strokeBorder(
+                            Color(hex: "#9A3412")!.opacity(0.2),
+                            style: StrokeStyle(lineWidth: 1, dash: [3])
+                        )
+                        .frame(height: 20)
                 }
             }
+            .frame(maxWidth: .infinity)
         }
     }
 
@@ -342,19 +374,20 @@ public struct RightPanelView: View {
         Button(label) { vm.paletteMode = mode }
             .font(.custom("Press Start 2P", size: 7))
             .padding(.horizontal, 8).padding(.vertical, 5)
+            .frame(maxWidth: .infinity)
             .background(isActive ? Color(hex: "#F97316")! : Color(hex: "#FFF7ED")!)
             .foregroundColor(isActive ? .white : Color(hex: "#F97316")!)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "#F97316")!, lineWidth: 2))
-            .shadow(color: isActive ? Color(hex: "#9A3412")!.opacity(0.4) : .clear, radius: 0, x: 2, y: 2)
+            .clipShape(RoundedRectangle(cornerRadius: 7))
+            .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color(hex: "#F97316")!, lineWidth: 2))
+            .shadow(color: isActive ? Color(hex: "#9A3412")!.opacity(0.3) : .clear, radius: 0, x: 2, y: 2)
     }
 
     // MARK: - Normal palette
 
     private var normalPaletteView: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            let columns = Array(repeating: GridItem(.fixed(28), spacing: 5), count: 5)
-            LazyVGrid(columns: columns, spacing: 5) {
+        let cols = Array(repeating: GridItem(.fixed(normalSwatchSize), spacing: normalSwatchGap), count: normalCols)
+        return VStack(alignment: .leading, spacing: 0) {
+            LazyVGrid(columns: cols, spacing: normalSwatchGap) {
                 ForEach(normalPalette, id: \.self) { hex in
                     normalSwatch(hex: hex)
                 }
@@ -363,16 +396,19 @@ public struct RightPanelView: View {
                     vm.currentHex = "transparent"
                 } label: {
                     TransparentSwatchView()
-                        .frame(width: 28, height: 28)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .frame(width: normalSwatchSize, height: normalSwatchSize)
+                        .clipShape(RoundedRectangle(cornerRadius: 7))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(vm.currentHex == "transparent"
+                            RoundedRectangle(cornerRadius: 7)
+                                .stroke(
+                                    vm.currentHex == "transparent"
                                         ? Color(hex: "#1A1A2E")! : Color.black.opacity(0.12),
-                                        lineWidth: vm.currentHex == "transparent" ? 3 : 2.5)
+                                    lineWidth: vm.currentHex == "transparent" ? 2.5 : 1.5
+                                )
                         )
                 }
                 .buttonStyle(.plain)
+                .help("透明 / 擦除")
             }
         }
     }
@@ -383,25 +419,28 @@ public struct RightPanelView: View {
         Button {
             vm.currentHex = hex
         } label: {
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 7)
                 .fill(Color(hex: hex) ?? .clear)
-                .frame(width: 28, height: 28)
+                .frame(width: normalSwatchSize, height: normalSwatchSize)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(isSelected ? Color(hex: "#1A1A2E")! : Color.black.opacity(0.12),
-                                lineWidth: isSelected ? 3 : 2.5)
+                    RoundedRectangle(cornerRadius: 7)
+                        .stroke(
+                            isSelected ? Color(hex: "#1A1A2E")! : Color.black.opacity(0.12),
+                            lineWidth: isSelected ? 2.5 : 1.5
+                        )
                 )
-                .shadow(color: .black.opacity(0.15), radius: 0, x: 2, y: 2)
-                .scaleEffect(isSelected ? 1.1 : 1.0)
+                .shadow(color: .black.opacity(0.12), radius: 0, x: 1, y: 1)
+                .scaleEffect(isSelected ? 1.08 : 1.0)
         }
         .buttonStyle(.plain)
+        .help(hex.uppercased())
         .animation(.easeOut(duration: 0.1), value: isSelected)
     }
 
     // MARK: - Perler palette
 
     private var perlerPaletteView: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 2) {
             ForEach(perlerSeries, id: \.letter) { series in
                 perlerSeriesRow(series)
             }
@@ -411,21 +450,24 @@ public struct RightPanelView: View {
                     vm.currentHex = "transparent"
                 } label: {
                     TransparentSwatchView()
-                        .frame(width: 22, height: 22)
+                        .frame(width: perlerSwatchSize, height: perlerSwatchSize)
                         .clipShape(RoundedRectangle(cornerRadius: 5))
                         .overlay(
                             RoundedRectangle(cornerRadius: 5)
-                                .stroke(vm.currentHex == "transparent"
+                                .stroke(
+                                    vm.currentHex == "transparent"
                                         ? Color(hex: "#1A1A2E")! : Color.black.opacity(0.12),
-                                        lineWidth: vm.currentHex == "transparent" ? 2.5 : 1.5)
+                                    lineWidth: vm.currentHex == "transparent" ? 2 : 1
+                                )
                         )
                 }
                 .buttonStyle(.plain)
+                .help("透明 / 擦除")
                 Text("透明")
                     .font(.custom("VT323", size: 15))
                     .foregroundColor(Color(hex: "#9A3412")!)
             }
-            .padding(.top, 2)
+            .padding(.top, 4)
         }
     }
 
@@ -433,7 +475,7 @@ public struct RightPanelView: View {
     private func perlerSeriesRow(_ series: (letter: String, name: String, colors: [PerlerColor])) -> some View {
         let isOpen = expandedSeries == series.letter
         VStack(alignment: .leading, spacing: 0) {
-            // Header row: letter button + preview dots
+            // Header
             Button {
                 withAnimation(.easeOut(duration: 0.15)) {
                     expandedSeries = isOpen ? nil : series.letter
@@ -443,71 +485,84 @@ public struct RightPanelView: View {
                     // Letter badge
                     Text(series.letter)
                         .font(.custom("Press Start 2P", size: 8))
-                        .frame(width: 26, height: 26)
+                        .frame(width: 24, height: 24)
                         .background(isOpen ? Color(hex: "#F97316")! : Color(hex: "#FFF7ED")!)
                         .foregroundColor(isOpen ? .white : Color(hex: "#F97316")!)
-                        .clipShape(RoundedRectangle(cornerRadius: 7))
-                        .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color(hex: "#F97316")!, lineWidth: 2))
-                        .shadow(color: Color(hex: "#9A3412")!.opacity(0.3), radius: 0, x: 2, y: 2)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(hex: "#F97316")!, lineWidth: 1.5))
 
-                    // Preview: first 4 colors
-                    HStack(spacing: 3) {
-                        ForEach(series.colors.prefix(4)) { pc in
-                            RoundedRectangle(cornerRadius: 3)
+                    // Series name
+                    Text(series.name)
+                        .font(.custom("VT323", size: 15))
+                        .foregroundColor(Color(hex: "#9A3412")!)
+
+                    Spacer(minLength: 0)
+
+                    // Preview dots (first 5)
+                    HStack(spacing: 2) {
+                        ForEach(series.colors.prefix(5)) { pc in
+                            RoundedRectangle(cornerRadius: 2)
                                 .fill(Color(hex: pc.hex) ?? .clear)
-                                .frame(width: 14, height: 14)
-                                .overlay(RoundedRectangle(cornerRadius: 3).stroke(Color.black.opacity(0.1), lineWidth: 1))
+                                .frame(width: 12, height: 12)
                         }
-                        if series.colors.count > 4 {
-                            Text("+\(series.colors.count - 4)")
-                                .font(.custom("VT323", size: 13))
-                                .foregroundColor(Color(hex: "#9A3412")!).opacity(0.5)
+                        if series.colors.count > 5 {
+                            Text("+\(series.colors.count - 5)")
+                                .font(.custom("VT323", size: 12))
+                                .foregroundColor(Color(hex: "#9A3412")!.opacity(0.5))
                         }
                     }
 
-                    Spacer()
+                    Image(systemName: isOpen ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(Color(hex: "#F97316")!)
                 }
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .padding(.vertical, 2)
 
-            // Expanded color grid
+            // Expanded grid
             if isOpen {
-                FlowLayout(spacing: 4) {
+                let cols = Array(repeating: GridItem(.fixed(perlerSwatchSize), spacing: perlerSwatchGap), count: perlerCols)
+                LazyVGrid(columns: cols, spacing: perlerSwatchGap) {
                     ForEach(series.colors) { pc in
                         perlerSwatch(pc)
                     }
                 }
-                .padding(.leading, 8)
-                .padding(.top, 4)
-                .padding(.bottom, 6)
-                .overlay(
-                    Rectangle()
-                        .frame(width: 2)
-                        .foregroundColor(Color(hex: "#F97316")!.opacity(0.3)),
-                    alignment: .leading
-                )
+                .padding(.top, 6)
+                .padding(.bottom, 4)
             }
         }
     }
 
     @ViewBuilder
     private func perlerSwatch(_ pc: PerlerColor) -> some View {
-        let isSelected = vm.currentHex == pc.hex
+        let isSelected = vm.currentHex.uppercased() == pc.hex.uppercased()
         Button {
             vm.currentHex = pc.hex
         } label: {
-            RoundedRectangle(cornerRadius: 5)
-                .fill(Color(hex: pc.hex) ?? .clear)
-                .frame(width: 22, height: 22)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 5)
-                        .stroke(isSelected ? Color(hex: "#1A1A2E")! : Color.black.opacity(0.12),
-                                lineWidth: isSelected ? 2.5 : 1.5)
-                )
-                .shadow(color: .black.opacity(0.12), radius: 0, x: 1, y: 1)
-                .scaleEffect(isSelected ? 1.12 : 1.0)
-                .help(pc.id)  // tooltip on hover
+            ZStack(alignment: .bottomTrailing) {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color(hex: pc.hex) ?? .clear)
+                    .frame(width: perlerSwatchSize, height: perlerSwatchSize)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(
+                                isSelected ? Color(hex: "#1A1A2E")! : Color.black.opacity(0.1),
+                                lineWidth: isSelected ? 2 : 1
+                            )
+                    )
+                    .shadow(color: .black.opacity(0.1), radius: 0, x: 1, y: 1)
+
+                // 色号角标，始终可见
+                Text(pc.id)
+                    .font(.system(size: 5, weight: .bold))
+                    .foregroundColor(.white)
+                    .shadow(color: .black.opacity(0.8), radius: 1, x: 0, y: 0)
+                    .padding(.trailing, 1)
+                    .padding(.bottom, 1)
+            }
+            .scaleEffect(isSelected ? 1.1 : 1.0)
         }
         .buttonStyle(.plain)
         .animation(.easeOut(duration: 0.1), value: isSelected)
@@ -516,12 +571,12 @@ public struct RightPanelView: View {
     // MARK: - Pet list
 
     private var petListSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             sectionTitle("我的宠物")
             if pets.isEmpty {
                 Text("还没有宠物，快去画一个！")
                     .font(.custom("VT323", size: 16))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color(hex: "#9A3412")!.opacity(0.6))
             } else {
                 ForEach(pets) { pet in
                     PetListRow(
@@ -538,7 +593,7 @@ public struct RightPanelView: View {
 
     private func sectionTitle(_ text: String) -> some View {
         Text(text)
-            .font(.custom("VT323", size: 20))
+            .font(.custom("VT323", size: 18))
             .fontWeight(.bold)
             .foregroundColor(Color(hex: "#9A3412")!)
     }
@@ -546,44 +601,6 @@ public struct RightPanelView: View {
     private func swatchColor(_ hex: String) -> Color {
         if hex == "transparent" { return .clear }
         return Color(hex: hex) ?? .clear
-    }
-
-    private func perlerCodeForHex(_ hex: String) -> String? {
-        for series in perlerSeries {
-            if let match = series.colors.first(where: { $0.hex.uppercased() == hex.uppercased() }) {
-                return match.id
-            }
-        }
-        return nil
-    }
-}
-
-// MARK: - FlowLayout (wrapping HStack)
-
-private struct FlowLayout: Layout {
-    var spacing: CGFloat = 4
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let maxWidth = proposal.width ?? 180
-        var x: CGFloat = 0, y: CGFloat = 0, rowH: CGFloat = 0
-        for sv in subviews {
-            let s = sv.sizeThatFits(.unspecified)
-            if x + s.width > maxWidth && x > 0 { x = 0; y += rowH + spacing; rowH = 0 }
-            rowH = max(rowH, s.height)
-            x += s.width + spacing
-        }
-        return CGSize(width: maxWidth, height: y + rowH)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX, y = bounds.minY, rowH: CGFloat = 0
-        for sv in subviews {
-            let s = sv.sizeThatFits(.unspecified)
-            if x + s.width > bounds.maxX && x > bounds.minX { x = bounds.minX; y += rowH + spacing; rowH = 0 }
-            sv.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(s))
-            rowH = max(rowH, s.height)
-            x += s.width + spacing
-        }
     }
 }
 
@@ -598,19 +615,20 @@ private struct PetListRow: View {
         HStack(spacing: 6) {
             Button(action: onTap) {
                 HStack(spacing: 8) {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.orange.opacity(0.3))
-                        .frame(width: 24, height: 24)
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(Color.orange.opacity(0.25))
+                        .frame(width: 22, height: 22)
                     Text(pet.name)
-                        .font(.custom("VT323", size: 20))
+                        .font(.custom("VT323", size: 18))
                         .foregroundColor(Color(hex: "#1A1A2E")!)
-                    Spacer()
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 10).padding(.vertical, 8)
+                .padding(.horizontal, 8).padding(.vertical, 6)
                 .background(Color(hex: "#FFF7ED")!)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: "#F97316")!, lineWidth: 2.5))
-                .shadow(color: Color(hex: "#9A3412")!.opacity(0.4), radius: 0, x: 2, y: 2)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(hex: "#F97316")!, lineWidth: 2))
+                .shadow(color: Color(hex: "#9A3412")!.opacity(0.3), radius: 0, x: 2, y: 2)
             }
             .buttonStyle(.plain)
 
@@ -618,15 +636,14 @@ private struct PetListRow: View {
                 ZStack {
                     Circle()
                         .fill(pet.isVisible ? Color(hex: "#06D6A0")! : Color(hex: "#CCCCCC")!)
-                        .frame(width: 22, height: 22)
-                        .shadow(color: pet.isVisible ? Color(hex: "#06D6A0")!.opacity(0.5) : .clear, radius: 4)
+                        .frame(width: 28, height: 28)
                     Image(systemName: pet.isVisible ? "eye.fill" : "eye.slash.fill")
-                        .font(.system(size: 9))
+                        .font(.system(size: 11))
                         .foregroundColor(.white)
                 }
             }
             .buttonStyle(.plain)
-            .help(pet.isVisible ? "点击隐藏宠物" : "点击召唤宠物到桌面")
+            .help(pet.isVisible ? "隐藏" : "召唤到桌面")
         }
     }
 }
@@ -634,49 +651,31 @@ private struct PetListRow: View {
 private struct TransparentSwatchView: View {
     var body: some View {
         Canvas { context, size in
-            let tileSize: CGFloat = 7
+            let tile: CGFloat = 6
             var y: CGFloat = 0
             while y < size.height {
                 var x: CGFloat = 0
                 while x < size.width {
-                    let isEven = (Int(x / tileSize) + Int(y / tileSize)) % 2 == 0
+                    let even = (Int(x / tile) + Int(y / tile)) % 2 == 0
                     context.fill(
-                        Path(CGRect(x: x, y: y, width: tileSize, height: tileSize)),
-                        with: .color(isEven ? Color(white: 0.75) : .white)
+                        Path(CGRect(x: x, y: y, width: tile, height: tile)),
+                        with: .color(even ? Color(white: 0.72) : .white)
                     )
-                    x += tileSize
+                    x += tile
                 }
-                y += tileSize
+                y += tile
             }
         }
     }
 }
 
-private struct ColorPickerButton: View {
-    @Binding var selectedHex: String
-    var onPick: (String) -> Void
-    @State private var pickerColor: Color = Color(hex: "#F97316") ?? .orange
-
-    var body: some View {
-        ColorPicker("", selection: $pickerColor, supportsOpacity: false)
-            .labelsHidden()
-            .frame(width: 28, height: 28)
-            .onChange(of: pickerColor) { newColor in
-                if let hex = newColor.toHex() {
-                    selectedHex = hex
-                    onPick(hex)
-                }
-            }
-    }
-}
-
 extension Color {
     func toHex() -> String? {
-        guard let components = NSColor(self).usingColorSpace(.sRGB)?.cgColor.components,
-              components.count >= 3 else { return nil }
-        let r = Int(components[0] * 255)
-        let g = Int(components[1] * 255)
-        let b = Int(components[2] * 255)
+        guard let c = NSColor(self).usingColorSpace(.sRGB),
+              let comps = c.cgColor.components, comps.count >= 3 else { return nil }
+        let r = Int(comps[0] * 255)
+        let g = Int(comps[1] * 255)
+        let b = Int(comps[2] * 255)
         return String(format: "#%02X%02X%02X", r, g, b)
     }
 }

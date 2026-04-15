@@ -7,7 +7,7 @@ swift build -c release
 APP_NAME="PixelPet"
 APP_DIR="${APP_NAME}.app"
 EXECUTABLE=".build/release/PixelPetApp"
-VERSION="1.0.1"  # ← 每次发版前改这里
+VERSION="1.0.2"  # ← 每次发版前改这里
 
 # 签名方式：
 #   现在（免费）:        SIGN_IDENTITY="-"
@@ -68,6 +68,12 @@ cat > "$APP_DIR/Contents/Info.plist" << EOF
 </dict>
 </plist>
 EOF
+
+# Fix rpath: SPM sets @loader_path but Sparkle lives in ../Frameworks
+# Change to @executable_path/../Frameworks so dyld finds it correctly
+install_name_tool \
+    -rpath "@loader_path" "@executable_path/../Frameworks" \
+    "$APP_DIR/Contents/MacOS/$APP_NAME"
 
 # Code sign（先签 framework，再签整个 app）
 codesign --force --deep --sign "$SIGN_IDENTITY" \

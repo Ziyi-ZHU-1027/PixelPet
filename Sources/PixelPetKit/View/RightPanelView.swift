@@ -167,6 +167,8 @@ public struct RightPanelView: View {
                 Divider().background(Color(hex: "#F97316")!.opacity(0.3))
                 paletteSection
                 Divider().background(Color(hex: "#F97316")!.opacity(0.3))
+                templateSection
+                Divider().background(Color(hex: "#F97316")!.opacity(0.3))
                 petListSection
             }
             .padding(panelPadding)
@@ -568,6 +570,53 @@ public struct RightPanelView: View {
         .animation(.easeOut(duration: 0.1), value: isSelected)
     }
 
+    // MARK: - Templates
+
+    private var templateSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            sectionTitle("示例模板")
+            Text("点击直接加载到画板")
+                .font(.custom("VT323", size: 14))
+                .foregroundColor(Color(hex: "#9A3412")!.opacity(0.6))
+            HStack(spacing: 8) {
+                ForEach(builtinTemplates, id: \.name) { template in
+                    templateCard(template)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func templateCard(_ template: PetTemplate) -> some View {
+        Button {
+            onLoadTemplate(template)
+        } label: {
+            VStack(spacing: 4) {
+                // Mini pixel preview
+                TemplatePreviewView(pixels: template.pixels, size: template.canvasSize)
+                    .frame(width: 56, height: 56)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(hex: "#F97316")!, lineWidth: 2))
+                Text(template.name)
+                    .font(.custom("VT323", size: 14))
+                    .foregroundColor(Color(hex: "#9A3412")!)
+                    .lineLimit(1)
+            }
+        }
+        .buttonStyle(.plain)
+        .help("加载「\(template.name)」到画板")
+    }
+
+    private func onLoadTemplate(_ template: PetTemplate) {
+        if vm.canvas.size != template.canvasSize {
+            vm.changeSize(template.canvasSize)
+        }
+        vm.canvas = PixelCanvas.from(hexArray: template.pixels, size: template.canvasSize)
+        vm.blinkCanvas = nil
+        vm.activeFrame = .normal
+        vm.clearHistory()
+    }
+
     // MARK: - Pet list
 
     private var petListSection: some View {
@@ -644,6 +693,33 @@ private struct PetListRow: View {
             }
             .buttonStyle(.plain)
             .help(pet.isVisible ? "隐藏" : "召唤到桌面")
+        }
+    }
+}
+
+/// Tiny pixel-art preview for template cards
+private struct TemplatePreviewView: View {
+    let pixels: [[String?]]
+    let size: Int
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            let cellW = canvasSize.width / CGFloat(size)
+            let cellH = canvasSize.height / CGFloat(size)
+            // checkerboard background
+            for row in 0..<size {
+                for col in 0..<size {
+                    let rect = CGRect(x: CGFloat(col) * cellW, y: CGFloat(row) * cellH,
+                                     width: cellW, height: cellH)
+                    if let hex = row < pixels.count && col < pixels[row].count ? pixels[row][col] : nil,
+                       let color = Color(hex: hex) {
+                        context.fill(Path(rect), with: .color(color))
+                    } else {
+                        let even = (row + col) % 2 == 0
+                        context.fill(Path(rect), with: .color(even ? Color(white: 0.88) : .white))
+                    }
+                }
+            }
         }
     }
 }

@@ -128,6 +128,12 @@ public final class EditorViewModel: ObservableObject {
     public var canUndo: Bool { !undoStack.isEmpty }
     public var canRedo: Bool { !redoStack.isEmpty }
 
+    /// Clear undo/redo history (used when loading a template).
+    public func clearHistory() {
+        undoStack.removeAll()
+        redoStack.removeAll()
+    }
+
     // MARK: - History
 
     /// Record a color into history (most recent first, no duplicates at front, max 8).

@@ -7,7 +7,7 @@ swift build -c release
 APP_NAME="PixelPet"
 APP_DIR="${APP_NAME}.app"
 EXECUTABLE=".build/release/PixelPetApp"
-VERSION="1.0.2"  # ← 每次发版前改这里
+VERSION="1.0.3"  # ← 每次发版前改这里
 
 # 签名方式：
 #   现在（免费）:        SIGN_IDENTITY="-"
@@ -27,6 +27,14 @@ mkdir -p "$APP_DIR/Contents/Resources"
 
 # Copy executable
 cp "$EXECUTABLE" "$APP_DIR/Contents/MacOS/$APP_NAME"
+
+# Copy app icon
+ICON_SRC="Sources/PixelPetApp/AppIcon.icns"
+if [ -f "$ICON_SRC" ]; then
+    cp "$ICON_SRC" "$APP_DIR/Contents/Resources/AppIcon.icns"
+else
+    echo "⚠️  AppIcon.icns not found, skipping icon"
+fi
 
 # Copy Sparkle.framework
 SPARKLE_FRAMEWORK=".build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
@@ -55,6 +63,8 @@ cat > "$APP_DIR/Contents/Info.plist" << EOF
     <string>${VERSION}</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>LSUIElement</key>

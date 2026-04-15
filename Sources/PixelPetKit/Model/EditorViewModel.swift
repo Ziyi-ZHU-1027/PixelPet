@@ -17,6 +17,14 @@ public final class EditorViewModel: ObservableObject {
     @Published public var currentTool: DrawTool = .pen
     @Published public var currentHex: String = "#E63946"
 
+    // MARK: - History colors (most recent first, max 8)
+    @Published public var colorHistory: [String] = []
+    private let maxHistory = 8
+
+    // MARK: - Palette mode
+    public enum PaletteMode { case normal, perler }
+    @Published public var paletteMode: PaletteMode = .normal
+
     // MARK: - UI state
     @Published public var showNameSheet: Bool = false
     @Published public var pendingSize: Int? = nil
@@ -54,8 +62,8 @@ public final class EditorViewModel: ObservableObject {
         switch currentTool {
         case .pen:
             pushUndoOnce()
+            recordHistory(currentHex)
             if activeFrame == .blink {
-                // Must reassign the whole optional to trigger @Published notification
                 var b = blinkCanvas ?? PixelCanvas(size: canvas.size)
                 b.setPixel(x: x, y: y, hex: currentHex)
                 blinkCanvas = b
@@ -73,6 +81,7 @@ public final class EditorViewModel: ObservableObject {
             }
         case .fill:
             pushUndoOnce()
+            recordHistory(currentHex)
             if activeFrame == .blink {
                 var b = blinkCanvas ?? PixelCanvas(size: canvas.size)
                 b.fill(x: x, y: y, hex: currentHex)
@@ -118,6 +127,17 @@ public final class EditorViewModel: ObservableObject {
 
     public var canUndo: Bool { !undoStack.isEmpty }
     public var canRedo: Bool { !redoStack.isEmpty }
+
+    // MARK: - History
+
+    /// Record a color into history (most recent first, no duplicates at front, max 8).
+    public func recordHistory(_ hex: String) {
+        guard hex != "transparent" else { return }
+        var h = colorHistory.filter { $0 != hex }  // remove duplicate
+        h.insert(hex, at: 0)
+        if h.count > maxHistory { h = Array(h.prefix(maxHistory)) }
+        colorHistory = h
+    }
 
     /// Push undo snapshot only once per stroke (throttled).
     private func pushUndoOnce() {

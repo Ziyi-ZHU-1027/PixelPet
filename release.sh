@@ -18,7 +18,11 @@ echo "📦 发版 v${VERSION}..."
 # 1. 先 build
 bash build.sh
 
-# 2. 打 zip（排除 .DS_Store）
+# 2. 清除隔离属性，让用户双击就能打开，无需右键
+echo "🔓  清除 Gatekeeper 隔离标记..."
+xattr -cr "$APP_DIR"
+
+# 3. 打 zip（排除 .DS_Store）
 echo "🗜  打包 zip..."
 ditto -c -k --keepParent --sequesterRsrc "$APP_DIR" "$ZIP_NAME"
 

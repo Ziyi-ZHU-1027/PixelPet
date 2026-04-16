@@ -5,16 +5,16 @@
         <link>https://Ziyi-ZHU-1027.github.io/PixelPet/appcast.xml</link>
         <description>PixelPet 更新日志</description>
         <item>
-            <title>v1.0.3</title>
-            <pubDate>三, 15  4 2026 12:05:49 +0000</pubDate>
-            <sparkle:version>1.0.3</sparkle:version>
-            <sparkle:shortVersionString>1.0.3</sparkle:shortVersionString>
+            <title>v1.0.4</title>
+            <pubDate>四, 16  4 2026 05:47:37 +0000</pubDate>
+            <sparkle:version>1.0.4</sparkle:version>
+            <sparkle:shortVersionString>1.0.4</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
             <enclosure
-                url="https://github.com/Ziyi-ZHU-1027/PixelPet/releases/download/v1.0.3/PixelPet-1.0.3.zip"
-                length="1456571"
+                url="https://github.com/Ziyi-ZHU-1027/PixelPet/releases/download/v1.0.4/PixelPet-1.0.4.zip"
+                length="1379947"
                 type="application/octet-stream"
-                edSignature="z/3UNvBxZjrtpD/gXixEJ2WBhMS93siwC2E2bC2C0YkyEjJgd4/KvDAOwxV/GsNeD7lpKZYFCjZo7bLURktcDw=="
+                edSignature="WXtOP3cjc1pSZtfm1cYW5HDfqJMdBzyEdkaZSS3LYACT/lejHAPbhnpiXoWtJMNUtY3iS2ydqp4HG2HwPsVfBA=="
             />
         </item>
     </channel>
